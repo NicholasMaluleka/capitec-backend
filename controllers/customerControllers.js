@@ -1,5 +1,7 @@
 const Customer = require('../models/customer.js')
 const Login = require('../models/customerLogin.js')
+const File = require('../models/file');
+const { Readable } = require("stream")
 
 
 const bcrypt = require('bcrypt')
@@ -7,10 +9,14 @@ const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 // Sending email
 const sendMail = require('../sendMail.js');
+//creating an Accout Number
+
+const pictureId = `picture-${new Date().getTime()}`;
 
 module.exports = {
     registerRoute: async (req, res, next) => {
         try {
+            req.body.accountNumber= new Date().getTime().toString()
             const salt = await bcrypt.genSalt(10)
             const hashPin = await bcrypt.hash(req.body.pin, salt)
             const payload = { ...req.body, };
@@ -28,7 +34,10 @@ module.exports = {
                 to: req.body.email.toString(),
                 subject: "New Account Created",
                 text: "Account successfully created",
-                html: `<b>Your Account with Capitec has been successfully created</b> <br><br>
+                html: `<b>Your Account with Capitec has been successfully created</b> <br>
+                Your Bank account Number is <b>${req.body.accountNumber}</b>
+                <br>
+                <br>
                <center> <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Capitec_Bank_logo.svg/768px-Capitec_Bank_logo.svg.png" width="250px" height="80px"/> </center>`,
             };
             sendMail(mailOptions);
@@ -36,6 +45,14 @@ module.exports = {
             res.status(201).send(result)
         } catch (error) {
             res.status(500).send(error)
+        }
+    },
+    getCustomers: async (req, res) => {
+        try {
+            const result = await Customer.find(req.params);
+            res.status(200).send(result)
+        } catch (error) {
+            res.status(500).send(error);
         }
     },
     
@@ -104,6 +121,39 @@ module.exports = {
           console.error('Error updating customer:', error);
           res.status(500).json({ message: 'Internal server error' });
         }
-      }
-    
+      },
+      uploadFile: async (req, res) => {
+        const { files } = req;
+
+        let { fieldname, originalname, mimetype, buffer } = files[0]
+
+        let newFile = new File({
+            filename: originalname,
+            contentType: mimetype,
+            length: buffer.length,
+            fileId: pictureId,
+        })
+
+        try {
+            const uploadStream = bucket.openUploadStream(fieldname)
+            const readBuffer = new Readable();
+            readBuffer.push(buffer)
+            readBuffer.push(null)
+
+            const isUploaded = await new Promise((resolve, reject) => {
+                readBuffer.pipe(uploadStream)
+                    .on("finish", resolve("successfull"))
+                    .on("error", reject("error occured while creating stream"))
+            })
+
+            newFile.id = uploadStream.id
+            const savingResults = await newFile.save();
+            if (!savingResults) {
+                res.status(404).send("error occured while saving our work")
+            }
+            res.send({ file: savingResults, message: "file uploaded successfully" })
+        } catch (error) {
+            console.log('error', error)
+        }
+    }
 }

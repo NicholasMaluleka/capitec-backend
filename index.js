@@ -20,7 +20,10 @@ dotenv.config()
 const routes = require('./routes/routes');
 app.use(routes);
 
+
+
 const PORT = 3000
 app.listen(PORT, ()=> {
     console.log(`Capitec Server running on ${PORT}`)
 })
+
