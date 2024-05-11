@@ -2,6 +2,7 @@ const Customer = require('../models/customer.js')
 const Login = require('../models/customerLogin.js')
 const File = require('../models/file');
 const { Readable } = require("stream")
+const mongoose = require("mongoose")
 
 
 const bcrypt = require('bcrypt')
@@ -10,6 +11,11 @@ const jwt = require('jsonwebtoken')
 // Sending email
 const sendMail = require('../sendMail.js');
 //creating an Accout Number
+
+let bucket;
+mongoose.connection.on("open", () => {
+    bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db);
+})
 
 const pictureId = `picture-${new Date().getTime()}`;
 
@@ -123,37 +129,52 @@ module.exports = {
         }
       },
       uploadFile: async (req, res) => {
-        const { files } = req;
-
-        let { fieldname, originalname, mimetype, buffer } = files[0]
-
-        let newFile = new File({
-            filename: originalname,
-            contentType: mimetype,
-            length: buffer.length,
-            fileId: pictureId,
-        })
-
         try {
-            const uploadStream = bucket.openUploadStream(fieldname)
-            const readBuffer = new Readable();
-            readBuffer.push(buffer)
-            readBuffer.push(null)
-
-            const isUploaded = await new Promise((resolve, reject) => {
-                readBuffer.pipe(uploadStream)
-                    .on("finish", resolve("successfull"))
-                    .on("error", reject("error occured while creating stream"))
-            })
-
-            newFile.id = uploadStream.id
-            const savingResults = await newFile.save();
-            if (!savingResults) {
-                res.status(404).send("error occured while saving our work")
+            const { file } = req;
+    
+            if (!file) {
+                return res.status(400).send("No file was uploaded.");
             }
-            res.send({ file: savingResults, message: "file uploaded successfully" })
+    
+            const { originalname, mimetype, buffer } = file;
+    
+            let newFile = new File({
+                filename: originalname,
+                contentType: mimetype,
+                length: buffer.length,
+                fileId: pictureId,
+            });
+    
+            const uploadStream = bucket.openUploadStream(originalname);
+            const readBuffer = new Readable();
+            readBuffer.push(buffer);
+            readBuffer.push(null);
+    
+            readBuffer.pipe(uploadStream);
+    
+            uploadStream.on("finish", async () => {
+                newFile.id = uploadStream.id;
+                try {
+                    const savingResults = await newFile.save();
+                    if (!savingResults) {
+                        res.status(404).send("Error occurred while saving the file.");
+                    } else {
+                        res.status(200).send({ file: savingResults, message: "File uploaded successfully." });
+                    }
+                } catch (error) {
+                    console.error('Error saving file:', error);
+                    res.status(500).send("Internal server error occurred while saving the file.");
+                }
+            });
+    
+            uploadStream.on("error", (err) => {
+                console.error('Error uploading file:', err);
+                res.status(500).send("Error occurred while uploading the file.");
+            });
         } catch (error) {
-            console.log('error', error)
+            console.error('Error handling file upload:', error);
+            res.status(500).send("Internal server error occurred while handling the file upload.");
         }
     }
+    
 }

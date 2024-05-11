@@ -18,8 +18,6 @@ module.exports = {
             let Admin = {
                 "name": "Capitec",
                 "surname": "Admin",
-                // "gender": "male",
-                // "id": "4564545645645",
                 "email": "kimberlymnguni@gmail.com",
                 "role": "admin",
                 "password": "123"
