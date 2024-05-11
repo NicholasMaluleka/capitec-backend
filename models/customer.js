@@ -8,6 +8,7 @@ const Customer = new mongoose.Schema({
     email: { type: String, lowercase: true, index: { unique: true } },
     pin: {type: String},
     accountNumber: {type: Number},
+    status: {type: String},
     balance: {type: Number, required: false},
 })
 
